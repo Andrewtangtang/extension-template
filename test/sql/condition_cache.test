@@ -1,0 +1,57 @@
+# name: test/sql/condition_cache.test
+# description: Test condition cache extension
+# group: [condition_cache]
+
+# Before loading, functions should not exist
+statement error
+SELECT * FROM condition_cache_info();
+----
+Catalog Error
+
+require condition_cache
+
+# Create test table with enough rows to span multiple row groups
+statement ok
+CREATE TABLE test_cc AS SELECT i AS id, i % 100 AS category FROM range(500000) t(i);
+
+# Cache info should be empty initially
+query I
+SELECT count(*) FROM condition_cache_info();
+----
+0
+
+# Build cache for a simple predicate
+query IIIIII
+SELECT * FROM condition_cache_build('test_cc', 'category = 42');
+----
+OK	test_cc	category = 42	5000	245	300
+
+# Cache should now have one entry
+query I
+SELECT count(*) FROM condition_cache_info();
+----
+1
+
+# Verify qualifying rows
+query III
+SELECT table_name, qualifying_rows, row_groups FROM condition_cache_info();
+----
+test_cc	5000	5
+
+# Run query that should benefit from cache (correctness check)
+query I
+SELECT count(*) FROM test_cc WHERE category = 42;
+----
+5000
+
+# Clear cache
+query I
+SELECT * FROM condition_cache_clear();
+----
+Cache cleared
+
+# Cache should be empty again
+query I
+SELECT count(*) FROM condition_cache_info();
+----
+0
