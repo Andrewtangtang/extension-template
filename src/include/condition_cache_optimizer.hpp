@@ -21,8 +21,8 @@ private:
 	// Compute a canonical filter key from a LogicalGet's table_filters
 	static string ComputeFilterKey(const string &table_name, const LogicalGet &get);
 
-	// Inject the cache-based ExpressionFilter on ROW_ID
-	static void InjectCacheFilter(LogicalGet &get, shared_ptr<ConditionCacheEntry> entry);
+	// Move original filters to LogicalFilter above, inject cache filter on scan
+	static void InjectCacheFilter(unique_ptr<LogicalOperator> &plan, shared_ptr<ConditionCacheEntry> entry);
 };
 
 } // namespace duckdb
