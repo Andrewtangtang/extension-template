@@ -68,4 +68,35 @@ void ConditionCacheFilterFn(DataChunk &args, ExpressionState &state, Vector &res
 	result.Reference(Value::BOOLEAN(passes));
 }
 
+// --- CacheExpressionFilter: ExpressionFilter with row-group level pruning ---
+
+CacheExpressionFilter::CacheExpressionFilter(unique_ptr<Expression> expr_p, shared_ptr<ConditionCacheEntry> entry)
+    : ExpressionFilter(std::move(expr_p)), cache_entry(std::move(entry)) {
+}
+
+FilterPropagateResult CacheExpressionFilter::CheckStatistics(BaseStatistics &stats) const {
+	if (!NumericStats::HasMinMax(stats)) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+
+	auto min_val = NumericStats::GetMin<int64_t>(stats);
+	auto max_val = NumericStats::GetMax<int64_t>(stats);
+
+	idx_t min_rg = NumericCast<idx_t>(min_val) / CONDITION_CACHE_ROW_GROUP_SIZE;
+	idx_t max_rg = NumericCast<idx_t>(max_val) / CONDITION_CACHE_ROW_GROUP_SIZE;
+
+	// If any row group in the range has matching vectors, we can't prune
+	for (idx_t rg = min_rg; rg <= max_rg; rg++) {
+		auto it = cache_entry->bitvectors.find(rg);
+		if (it != cache_entry->bitvectors.end() && !it->second.IsEmpty()) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
+	}
+	return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+}
+
+unique_ptr<TableFilter> CacheExpressionFilter::Copy() const {
+	return make_uniq<CacheExpressionFilter>(expr->Copy(), cache_entry);
+}
+
 } // namespace duckdb

@@ -21,8 +21,15 @@ private:
 	// Compute a canonical filter key from a LogicalGet's table_filters
 	static string ComputeFilterKey(const string &table_name, const LogicalGet &get);
 
-	// Move original filters to LogicalFilter above, inject cache filter on scan
+	// Compute expression key from a LogicalFilter expression (for non-pushable predicates like LIKE)
+	static string ComputeExpressionKey(const string &table_name, const Expression &expr);
+
+	// Move original filters to LogicalFilter above, inject cache filter on scan (for pushable predicates)
 	static void InjectCacheFilter(unique_ptr<LogicalOperator> &plan, shared_ptr<ConditionCacheEntry> entry);
+
+	// Inject cache filter on a LogicalGet without moving filters (for non-pushable predicates)
+	// The LogicalFilter already exists above, so we just add the cache filter to the scan
+	static void InjectCacheFilterSimple(unique_ptr<LogicalOperator> &get_plan, shared_ptr<ConditionCacheEntry> entry);
 };
 
 } // namespace duckdb

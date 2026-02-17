@@ -4,6 +4,8 @@
 
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/storage/statistics/numeric_stats.hpp"
 
 namespace duckdb {
 
@@ -30,5 +32,16 @@ unique_ptr<FunctionLocalState> ConditionCacheFilterInit(ExpressionState &state,
 
 // The filter function: for each vector, check the bitvector and return constant boolean
 void ConditionCacheFilterFn(DataChunk &args, ExpressionState &state, Vector &result);
+
+// ExpressionFilter subclass that overrides CheckStatistics for row-group level pruning
+class CacheExpressionFilter : public ExpressionFilter {
+public:
+	shared_ptr<ConditionCacheEntry> cache_entry;
+
+	CacheExpressionFilter(unique_ptr<Expression> expr, shared_ptr<ConditionCacheEntry> entry);
+
+	FilterPropagateResult CheckStatistics(BaseStatistics &stats) const override;
+	unique_ptr<TableFilter> Copy() const override;
+};
 
 } // namespace duckdb
